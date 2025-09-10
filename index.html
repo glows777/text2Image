@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文字生成图片聊天助手</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    animation: {
+                        'bounce-slow': 'bounce 1s infinite',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <!-- 主容器 -->
+    <div class="flex flex-col h-screen max-w-4xl mx-auto bg-white shadow-lg">
+        <!-- 头部 -->
+        <header class="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 shadow-md">
+            <div class="flex justify-between items-center">
+                <div class="flex-1">
+                    <h1 class="text-2xl font-bold text-center">🎨 文字生成图片聊天助手</h1>
+                    <p class="text-center text-blue-100 mt-1">输入文字描述，AI为您生成精美图片</p>
+                </div>
+                <button id="settingsButton" class="bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg p-2 transition-all duration-200" title="设置API密钥">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- 聊天消息区域 -->
+        <div id="chatContainer" class="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+            <!-- 欢迎消息 -->
+            <div class="flex justify-start">
+                <div class="max-w-xs lg:max-w-md">
+                    <div class="bg-white rounded-lg shadow-md p-3 border-l-4 border-blue-500">
+                        <p class="text-gray-800">👋 欢迎使用文字生成图片助手！</p>
+                        <p class="text-gray-600 text-sm mt-2">使用前请先点击右上角的设置按钮配置您的DashScope API密钥，然后就可以开始生成精美图片了！</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 输入区域 -->
+        <div class="border-t bg-white p-4">
+            <div class="flex space-x-2">
+                <input 
+                    type="text" 
+                    id="messageInput" 
+                    placeholder="请输入您想要生成的图片描述..." 
+                    class="flex-1 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    maxlength="500"
+                >
+                <button 
+                    id="sendButton" 
+                    class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    <span id="sendButtonText">发送</span>
+                    <div id="loadingSpinner" class="hidden inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin ml-2"></div>
+                </button>
+            </div>
+            <div class="mt-2 text-sm text-gray-500">
+                <span id="charCount">0</span>/500 字符
+            </div>
+        </div>
+    </div>
+
+    <!-- 设置弹窗 -->
+    <div id="settingsModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold text-gray-800">⚙️ 设置</h2>
+                    <button id="closeSettingsButton" class="text-gray-500 hover:text-gray-700">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label for="apiKeyInput" class="block text-sm font-medium text-gray-700 mb-2">
+                            DashScope API密钥
+                        </label>
+                        <input 
+                            type="password" 
+                            id="apiKeyInput" 
+                            placeholder="请输入您的API密钥..."
+                            class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                        <p class="text-xs text-gray-500 mt-1">
+                            您的API密钥将安全保存在本地浏览器中
+                        </p>
+                    </div>
+                    
+                    <div class="flex justify-end space-x-3 pt-4">
+                        <button id="clearApiKeyButton" class="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200">
+                            清除密钥
+                        </button>
+                        <button id="saveApiKeyButton" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors duration-200">
+                            保存
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class ChatApp {
+            constructor() {
+                this.chatContainer = document.getElementById('chatContainer');
+                this.messageInput = document.getElementById('messageInput');
+                this.sendButton = document.getElementById('sendButton');
+                this.sendButtonText = document.getElementById('sendButtonText');
+                this.loadingSpinner = document.getElementById('loadingSpinner');
+                this.charCount = document.getElementById('charCount');
+                
+                // 设置相关元素
+                this.settingsButton = document.getElementById('settingsButton');
+                this.settingsModal = document.getElementById('settingsModal');
+                this.closeSettingsButton = document.getElementById('closeSettingsButton');
+                this.apiKeyInput = document.getElementById('apiKeyInput');
+                this.saveApiKeyButton = document.getElementById('saveApiKeyButton');
+                this.clearApiKeyButton = document.getElementById('clearApiKeyButton');
+                
+                this.initEventListeners();
+                this.loadApiKey();
+            }
+
+            initEventListeners() {
+                // 发送按钮点击事件
+                this.sendButton.addEventListener('click', () => this.handleSendMessage());
+                
+                // 输入框回车事件
+                this.messageInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        this.handleSendMessage();
+                    }
+                });
+
+                // 字符计数
+                this.messageInput.addEventListener('input', (e) => {
+                    this.charCount.textContent = e.target.value.length;
+                });
+
+                // 设置相关事件
+                this.settingsButton.addEventListener('click', () => this.openSettings());
+                this.closeSettingsButton.addEventListener('click', () => this.closeSettings());
+                this.saveApiKeyButton.addEventListener('click', () => this.saveApiKey());
+                this.clearApiKeyButton.addEventListener('click', () => this.clearApiKey());
+                
+                // 点击弹窗背景关闭
+                this.settingsModal.addEventListener('click', (e) => {
+                    if (e.target === this.settingsModal) {
+                        this.closeSettings();
+                    }
+                });
+
+                // ESC键关闭弹窗
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape' && !this.settingsModal.classList.contains('hidden')) {
+                        this.closeSettings();
+                    }
+                });
+            }
+
+            async handleSendMessage() {
+                const message = this.messageInput.value.trim();
+                if (!message) return;
+
+                // 禁用输入和按钮
+                this.setLoading(true);
+                
+                // 添加用户消息
+                this.addUserMessage(message);
+                
+                // 清空输入框
+                this.messageInput.value = '';
+                this.charCount.textContent = '0';
+
+                try {
+                    // 调用API生成图片
+                    await this.generateImage(message);
+                } catch (error) {
+                    this.addErrorMessage('生成图片时出现错误，请稍后重试。');
+                    console.error('Error:', error);
+                } finally {
+                    this.setLoading(false);
+                }
+            }
+
+            addUserMessage(message) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'flex justify-end';
+                messageDiv.innerHTML = `
+                    <div class="max-w-xs lg:max-w-md">
+                        <div class="bg-blue-600 text-white rounded-lg shadow-md p-3">
+                            <p>${this.escapeHtml(message)}</p>
+                        </div>
+                        <div class="text-xs text-gray-500 mt-1 text-right">${this.getCurrentTime()}</div>
+                    </div>
+                `;
+                this.chatContainer.appendChild(messageDiv);
+                this.scrollToBottom();
+            }
+
+            addBotMessage(text, imageUrl = null) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'flex justify-start';
+                
+                let imageHtml = '';
+                if (imageUrl) {
+                    imageHtml = `
+                        <div class="mt-3">
+                            <img src="${imageUrl}" alt="生成的图片" class="max-w-full h-auto rounded-lg shadow-md cursor-pointer hover:shadow-lg transition-shadow duration-200" onclick="this.requestFullscreen()">
+                        </div>
+                    `;
+                }
+
+                messageDiv.innerHTML = `
+                    <div class="max-w-xs lg:max-w-md">
+                        <div class="bg-white rounded-lg shadow-md p-3 border-l-4 border-green-500">
+                            <div class="flex items-center mb-2">
+                                <span class="text-green-600 mr-2">🤖</span>
+                                <span class="font-medium text-gray-800">AI助手</span>
+                            </div>
+                            <p class="text-gray-800">${this.escapeHtml(text)}</p>
+                            ${imageHtml}
+                        </div>
+                        <div class="text-xs text-gray-500 mt-1">${this.getCurrentTime()}</div>
+                    </div>
+                `;
+                this.chatContainer.appendChild(messageDiv);
+                this.scrollToBottom();
+            }
+
+            addLoadingMessage() {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'flex justify-start';
+                messageDiv.id = 'loadingMessage';
+                messageDiv.innerHTML = `
+                    <div class="max-w-xs lg:max-w-md">
+                        <div class="bg-white rounded-lg shadow-md p-3 border-l-4 border-yellow-500">
+                            <div class="flex items-center">
+                                <div class="flex space-x-1 mr-3">
+                                    <div class="w-2 h-2 bg-yellow-500 rounded-full animate-bounce"></div>
+                                    <div class="w-2 h-2 bg-yellow-500 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
+                                    <div class="w-2 h-2 bg-yellow-500 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+                                </div>
+                                <span class="text-gray-600">正在生成图片...</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                this.chatContainer.appendChild(messageDiv);
+                this.scrollToBottom();
+            }
+
+            removeLoadingMessage() {
+                const loadingMessage = document.getElementById('loadingMessage');
+                if (loadingMessage) {
+                    loadingMessage.remove();
+                }
+            }
+
+            addErrorMessage(message) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'flex justify-start';
+                messageDiv.innerHTML = `
+                    <div class="max-w-xs lg:max-w-md">
+                        <div class="bg-red-50 border-l-4 border-red-500 rounded-lg shadow-md p-3">
+                            <div class="flex items-center mb-2">
+                                <span class="text-red-600 mr-2">❌</span>
+                                <span class="font-medium text-red-800">错误</span>
+                            </div>
+                            <p class="text-red-700">${this.escapeHtml(message)}</p>
+                        </div>
+                        <div class="text-xs text-gray-500 mt-1">${this.getCurrentTime()}</div>
+                    </div>
+                `;
+                this.chatContainer.appendChild(messageDiv);
+                this.scrollToBottom();
+            }
+
+            async generateImage(prompt) {
+                // 添加加载消息
+                this.addLoadingMessage();
+
+                try {
+                    // 步骤1：创建任务
+                    const taskId = await this.createImageTask(prompt);
+                    
+                    // 步骤2：轮询任务结果
+                    const result = await this.pollTaskResult(taskId);
+                    
+                    // 移除加载消息
+                    this.removeLoadingMessage();
+                    
+                    if (result.success) {
+                        this.addBotMessage(
+                            `已为您生成基于"${prompt}"的图片`, 
+                            result.imageUrl
+                        );
+                    } else {
+                        this.addErrorMessage(`生成图片失败: ${result.error}`);
+                    }
+                } catch (error) {
+                    // 移除加载消息
+                    this.removeLoadingMessage();
+                    this.addErrorMessage(`生成图片时出现错误: ${error.message}`);
+                    console.error('Generate image error:', error);
+                }
+            }
+
+            async createImageTask(prompt) {
+                const apiKey = this.getApiKey();
+                if (!apiKey) {
+                    this.openSettings();
+                    throw new Error('请先在设置中配置您的DashScope API密钥');
+                }
+
+                const response = await fetch('/api/create-task', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        apiKey: apiKey,
+                        data: {
+                            model: 'qwen-image',
+                            input: {
+                                prompt: prompt
+                            },
+                            parameters: {
+                                size: '1328*1328',
+                                n: 1,
+                                prompt_extend: true,
+                                watermark: true
+                            }
+                        }
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(`创建任务失败: ${errorData.error || response.statusText}`);
+                }
+
+                const data = await response.json();
+                
+                if (data.code && data.code !== '200') {
+                    throw new Error(`API错误: ${data.message || '未知错误'}`);
+                }
+
+                if (!data.output || !data.output.task_id) {
+                    throw new Error('无法获取任务ID');
+                }
+
+                return data.output.task_id;
+            }
+
+            async pollTaskResult(taskId, maxRetries = 30) {
+                const apiKey = this.getApiKey();
+                let retries = 0;
+
+                while (retries < maxRetries) {
+                    try {
+                        const response = await fetch(`/api/task/${taskId}`, {
+                            method: 'GET',
+                            headers: {
+                                'Authorization': `Bearer ${apiKey}`
+                            }
+                        });
+
+                        if (!response.ok) {
+                            const errorData = await response.json().catch(() => ({}));
+                            throw new Error(`查询任务失败: ${errorData.error || response.statusText}`);
+                        }
+
+                        const data = await response.json();
+                        
+                        if (data.code && data.code !== '200') {
+                            throw new Error(`API错误: ${data.message || '未知错误'}`);
+                        }
+
+                        const taskStatus = data.output?.task_status;
+                        
+                        if (taskStatus === 'SUCCEEDED') {
+                            const results = data.output?.results;
+                            if (results && results.length > 0 && results[0].url) {
+                                return {
+                                    success: true,
+                                    imageUrl: results[0].url
+                                };
+                            } else {
+                                throw new Error('生成成功但未找到图片URL');
+                            }
+                        } else if (taskStatus === 'FAILED') {
+                            return {
+                                success: false,
+                                error: data.output?.message || '任务执行失败'
+                            };
+                        } else if (taskStatus === 'PENDING' || taskStatus === 'RUNNING') {
+                            // 任务还在进行中，等待后重试
+                            await new Promise(resolve => setTimeout(resolve, 2000));
+                            retries++;
+                            continue;
+                        } else {
+                            throw new Error(`未知任务状态: ${taskStatus}`);
+                        }
+                    } catch (error) {
+                        if (retries === maxRetries - 1) {
+                            throw error;
+                        }
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+                        retries++;
+                    }
+                }
+
+                throw new Error('任务超时，请稍后重试');
+            }
+
+            getApiKey() {
+                return localStorage.getItem('dashscope_api_key');
+            }
+
+            loadApiKey() {
+                const apiKey = this.getApiKey();
+                if (apiKey) {
+                    this.apiKeyInput.value = apiKey;
+                }
+            }
+
+            openSettings() {
+                this.settingsModal.classList.remove('hidden');
+            }
+
+            closeSettings() {
+                this.settingsModal.classList.add('hidden');
+            }
+
+            saveApiKey() {
+                const apiKey = this.apiKeyInput.value.trim();
+                if (apiKey) {
+                    localStorage.setItem('dashscope_api_key', apiKey);
+                    this.closeSettings();
+                    this.addBotMessage('✅ API密钥已保存成功！');
+                } else {
+                    alert('请输入有效的API密钥');
+                }
+            }
+
+            clearApiKey() {
+                if (confirm('确定要清除保存的API密钥吗？')) {
+                    localStorage.removeItem('dashscope_api_key');
+                    this.apiKeyInput.value = '';
+                    this.addBotMessage('🗑️ API密钥已清除');
+                }
+            }
+
+            setLoading(isLoading) {
+                this.sendButton.disabled = isLoading;
+                this.messageInput.disabled = isLoading;
+                
+                if (isLoading) {
+                    this.sendButtonText.textContent = '生成中...';
+                    this.loadingSpinner.classList.remove('hidden');
+                } else {
+                    this.sendButtonText.textContent = '发送';
+                    this.loadingSpinner.classList.add('hidden');
+                }
+            }
+
+            escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            getCurrentTime() {
+                return new Date().toLocaleTimeString('zh-CN', { 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                });
+            }
+
+            scrollToBottom() {
+                setTimeout(() => {
+                    this.chatContainer.scrollTop = this.chatContainer.scrollHeight;
+                }, 100);
+            }
+        }
+
+        // 初始化应用
+        document.addEventListener('DOMContentLoaded', () => {
+            new ChatApp();
+        });
+    </script>
+</body>
+</html>
