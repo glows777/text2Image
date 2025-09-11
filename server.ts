@@ -13,9 +13,31 @@ interface DashScopeRequest {
     };
 }
 
+interface ImageProcessRequest {
+    model: string;
+    input: {
+        messages: Array<{
+            role: string;
+            content: Array<{
+                image?: string; // base64 format: data:{MIME_type};base64,{base64_data}
+                text?: string;
+            }>;
+        }>;
+    };
+    parameters: {
+        negative_prompt?: string;
+        watermark?: boolean;
+    };
+}
+
 interface ProxyRequestBody {
     apiKey: string;
     data: DashScopeRequest;
+}
+
+interface ImageProxyRequestBody {
+    apiKey: string;
+    data: ImageProcessRequest;
 }
 
 const DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/api/v1";
@@ -214,6 +236,78 @@ const server = serve({
             }
         }
 
+        // 图片处理的代理接口
+        if (req.method === "POST" && url.pathname === "/api/process-image") {
+            try {
+                const body = await req.json() as ImageProxyRequestBody;
+
+                if (!body.apiKey) {
+                    return new Response(
+                        JSON.stringify({ error: "API密钥不能为空" }),
+                        {
+                            status: 400,
+                            headers: {
+                                ...corsHeaders,
+                                "Content-Type": "application/json",
+                            },
+                        }
+                    );
+                }
+
+                if (!body.data || !body.data.input.messages) {
+                    return new Response(
+                        JSON.stringify({ error: "请求数据不能为空" }),
+                        {
+                            status: 400,
+                            headers: {
+                                ...corsHeaders,
+                                "Content-Type": "application/json",
+                            },
+                        }
+                    );
+                }
+
+                // 转发请求到 DashScope 图片编辑API
+                const dashScopeResponse = await fetch(
+                    `${DASHSCOPE_BASE_URL}/services/aigc/multimodal-generation/generation`,
+                    {
+                        method: "POST",
+                        headers: {
+                            "Authorization": `Bearer ${body.apiKey}`,
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify(body.data),
+                    }
+                );
+
+                const responseData = await dashScopeResponse.json();
+
+                return new Response(JSON.stringify(responseData), {
+                    status: dashScopeResponse.status,
+                    headers: {
+                        ...corsHeaders,
+                        "Content-Type": "application/json",
+                    },
+                });
+
+            } catch (error) {
+                console.error("Process image error:", error);
+                return new Response(
+                    JSON.stringify({
+                        error: "服务器内部错误",
+                        details: error instanceof Error ? error.message : "Unknown error"
+                    }),
+                    {
+                        status: 500,
+                        headers: {
+                            ...corsHeaders,
+                            "Content-Type": "application/json",
+                        },
+                    }
+                );
+            }
+        }
+
         // 404 处理
         return new Response(
             JSON.stringify({
@@ -239,3 +333,4 @@ console.log(`❤️  健康检查: http://localhost:${server.port}/health`);
 console.log(`📝 API接口:`);
 console.log(`   POST /api/create-task - 创建图片生成任务`);
 console.log(`   GET  /api/task/{taskId} - 查询任务状态`);
+console.log(`   POST /api/process-image - 处理图片编辑任务`);

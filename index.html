@@ -51,14 +51,36 @@
 
         <!-- 输入区域 -->
         <div class="border-t bg-white p-4">
+            <!-- 图片预览区域 -->
+            <div id="imagePreviewContainer" class="hidden mb-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm font-medium text-gray-700">📷 已选择图片：</span>
+                    <button id="removeImageButton" class="text-red-500 hover:text-red-700 text-sm">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                <img id="imagePreview" src="" alt="预览图片" class="max-w-full h-32 object-contain rounded border">
+            </div>
+            
             <div class="flex space-x-2">
-                <input 
-                    type="text" 
-                    id="messageInput" 
-                    placeholder="请输入您想要生成的图片描述..." 
-                    class="flex-1 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    maxlength="500"
-                >
+                <div class="flex-1 relative">
+                    <input 
+                        type="text" 
+                        id="messageInput" 
+                        placeholder="请输入您想要生成的图片描述，或选择图片进行处理..." 
+                        class="w-full border border-gray-300 rounded-lg px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        maxlength="500"
+                    >
+                    <!-- 图片上传按钮 -->
+                    <label for="imageUpload" class="absolute right-2 top-1/2 transform -translate-y-1/2 cursor-pointer text-gray-500 hover:text-blue-500 transition-colors duration-200" title="上传图片">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                        </svg>
+                    </label>
+                    <input type="file" id="imageUpload" accept="image/*" class="hidden">
+                </div>
                 <button 
                     id="sendButton" 
                     class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -67,8 +89,9 @@
                     <div id="loadingSpinner" class="hidden inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin ml-2"></div>
                 </button>
             </div>
-            <div class="mt-2 text-sm text-gray-500">
-                <span id="charCount">0</span>/500 字符
+            <div class="mt-2 text-sm text-gray-500 flex justify-between items-center">
+                <span>按回车键发送，或点击图片图标上传图片</span>
+                <span><span id="charCount">0</span>/500</span>
             </div>
         </div>
     </div>
@@ -125,6 +148,12 @@
                 this.loadingSpinner = document.getElementById('loadingSpinner');
                 this.charCount = document.getElementById('charCount');
                 
+                // 图片上传相关元素
+                this.imageUpload = document.getElementById('imageUpload');
+                this.imagePreview = document.getElementById('imagePreview');
+                this.imagePreviewContainer = document.getElementById('imagePreviewContainer');
+                this.removeImageButton = document.getElementById('removeImageButton');
+                
                 // 设置相关元素
                 this.settingsButton = document.getElementById('settingsButton');
                 this.settingsModal = document.getElementById('settingsModal');
@@ -132,6 +161,9 @@
                 this.apiKeyInput = document.getElementById('apiKeyInput');
                 this.saveApiKeyButton = document.getElementById('saveApiKeyButton');
                 this.clearApiKeyButton = document.getElementById('clearApiKeyButton');
+                
+                // 当前选择的图片
+                this.selectedImage = null;
                 
                 this.initEventListeners();
                 this.loadApiKey();
@@ -153,6 +185,10 @@
                 this.messageInput.addEventListener('input', (e) => {
                     this.charCount.textContent = e.target.value.length;
                 });
+
+                // 图片上传相关事件
+                this.imageUpload.addEventListener('change', (e) => this.handleImageUpload(e));
+                this.removeImageButton.addEventListener('click', () => this.removeImage());
 
                 // 设置相关事件
                 this.settingsButton.addEventListener('click', () => this.openSettings());
@@ -177,36 +213,57 @@
 
             async handleSendMessage() {
                 const message = this.messageInput.value.trim();
-                if (!message) return;
+                
+                // 检查是否有文本或图片
+                if (!message && !this.selectedImage) return;
 
                 // 禁用输入和按钮
                 this.setLoading(true);
                 
-                // 添加用户消息
-                this.addUserMessage(message);
+                // 添加用户消息（显示文本和/或图片）
+                this.addUserMessage(message, this.selectedImage);
                 
-                // 清空输入框
+                // 清空输入框和图片
                 this.messageInput.value = '';
                 this.charCount.textContent = '0';
+                
+                const imageToProcess = this.selectedImage;
+                this.removeImage();
 
                 try {
-                    // 调用API生成图片
-                    await this.generateImage(message);
+                    if (imageToProcess) {
+                        // 如果有图片，调用图片处理API
+                        await this.processImageWithText(imageToProcess, message);
+                    } else {
+                        // 如果只有文本，调用原来的文本生成图片API
+                        await this.generateImage(message);
+                    }
                 } catch (error) {
-                    this.addErrorMessage('生成图片时出现错误，请稍后重试。');
+                    this.addErrorMessage('处理请求时出现错误，请稍后重试。');
                     console.error('Error:', error);
                 } finally {
                     this.setLoading(false);
                 }
             }
 
-            addUserMessage(message) {
+            addUserMessage(message, image = null) {
                 const messageDiv = document.createElement('div');
                 messageDiv.className = 'flex justify-end';
+                
+                let imageHtml = '';
+                if (image) {
+                    imageHtml = `
+                        <div class="mb-2">
+                            <img src="${image}" alt="用户上传的图片" class="max-w-full h-32 object-contain rounded border">
+                        </div>
+                    `;
+                }
+                
                 messageDiv.innerHTML = `
                     <div class="max-w-xs lg:max-w-md">
                         <div class="bg-blue-600 text-white rounded-lg shadow-md p-3">
-                            <p>${this.escapeHtml(message)}</p>
+                            ${imageHtml}
+                            ${message ? `<p>${this.escapeHtml(message)}</p>` : ''}
                         </div>
                         <div class="text-xs text-gray-500 mt-1 text-right">${this.getCurrentTime()}</div>
                     </div>
@@ -429,6 +486,141 @@
                 }
 
                 throw new Error('任务超时，请稍后重试');
+            }
+
+            // 图片上传处理方法
+            handleImageUpload(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                // 检查文件类型
+                if (!file.type.startsWith('image/')) {
+                    this.addErrorMessage('请选择有效的图片文件');
+                    return;
+                }
+
+                // 检查文件大小 (限制为10MB)
+                if (file.size > 10 * 1024 * 1024) {
+                    this.addErrorMessage('图片文件大小不能超过10MB');
+                    return;
+                }
+
+                // 读取图片并显示预览
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    this.selectedImage = e.target.result;
+                    this.imagePreview.src = e.target.result;
+                    this.imagePreviewContainer.classList.remove('hidden');
+                };
+                reader.readAsDataURL(file);
+            }
+
+            removeImage() {
+                this.selectedImage = null;
+                this.imagePreview.src = '';
+                this.imagePreviewContainer.classList.add('hidden');
+                this.imageUpload.value = '';
+            }
+
+            // 处理图片+文本的API调用
+            async processImageWithText(imageBase64, text) {
+                // 添加加载消息
+                this.addLoadingMessage();
+
+                try {
+                    const apiKey = this.getApiKey();
+                    if (!apiKey) {
+                        this.openSettings();
+                        throw new Error('请先在设置中配置您的DashScope API密钥');
+                    }
+
+                    // 构建API请求数据
+                    const content = [];
+                    
+                    // 添加图片
+                    content.push({
+                        image: imageBase64 // imageBase64 已经是 data:{MIME_type};base64,{base64_data} 格式
+                    });
+                    
+                    // 添加文本（如果有）
+                    if (text && text.trim()) {
+                        content.push({
+                            text: text.trim()
+                        });
+                    } else {
+                        // 如果没有文本，提供一个默认的编辑指令
+                        content.push({
+                            text: "请对这张图片进行优化处理"
+                        });
+                    }
+
+                    const requestData = {
+                        model: "qwen-image-edit",
+                        input: {
+                            messages: [
+                                {
+                                    role: "user",
+                                    content: content
+                                }
+                            ]
+                        },
+                        parameters: {
+                            negative_prompt: "",
+                            watermark: false
+                        }
+                    };
+
+                    // 调用后端接口
+                    const response = await fetch('/api/process-image', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            apiKey: apiKey,
+                            data: requestData
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({}));
+                        throw new Error(`处理图片失败: ${errorData.error || response.statusText}`);
+                    }
+
+                    const data = await response.json();
+                    
+                    // 移除加载消息
+                    this.removeLoadingMessage();
+                    
+                    if (data.code && data.code !== '200') {
+                        throw new Error(`API错误: ${data.message || '未知错误'}`);
+                    }
+
+                    // 检查返回的结果
+                    if (data.output && data.output.choices && data.output.choices.length > 0) {
+                        const choice = data.output.choices[0];
+                        if (choice.message && choice.message.content && choice.message.content.length > 0) {
+                            const content = choice.message.content[0];
+                            if (content.image) {
+                                this.addBotMessage(
+                                    text ? `已为您处理图片: "${text}"` : '已为您处理图片',
+                                    content.image
+                                );
+                            } else {
+                                throw new Error('API返回的数据中没有找到处理后的图片');
+                            }
+                        } else {
+                            throw new Error('API返回的数据格式不正确');
+                        }
+                    } else {
+                        throw new Error('API返回的数据中没有找到处理结果');
+                    }
+                    
+                } catch (error) {
+                    this.removeLoadingMessage();
+                    this.addErrorMessage(`处理图片时出现错误: ${error.message}`);
+                    console.error('Process image error:', error);
+                }
             }
 
             getApiKey() {
